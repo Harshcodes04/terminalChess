@@ -1,15 +1,8 @@
-// ============================================================
-//  OWNER : Member C
-//  LAYER : Rules and game state
-//  FILE  : src/GameState.cpp
-//
-//  Only Member C edits this file. Ask C for changes.
-// ============================================================
 
 #include "GameState.h"
 
-// Helper. Asks whether this colour's king is attacked on the board handed in.
-// It is written as a plain function and not a member because we also need to
+// Asks whether this colour's king is attacked on the board handed in.
+//  plain function and not a member because we also need to
 // ask the question about a throwaway copy of the board, not just our own.
 static bool kingIsAttacked(const Board& b, Color c) {
     Position kingSquare = b.findKing(c);
