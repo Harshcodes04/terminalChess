@@ -1,10 +1,4 @@
-// ============================================================
-//  OWNER : Member C
-//  LAYER : Rules and game state
-//  FILE  : src/GameState.h
-//
-//  Only Member C edits this file. Ask C for changes.
-// ============================================================
+
 
 #ifndef GAMESTATE_H
 #define GAMESTATE_H
