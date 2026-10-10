@@ -61,3 +61,93 @@ bool GameState::isKingInCheck(Color c) const {
     return kingIsAttacked(board, c);
 }
 
+MoveResult GameState::isLegalMove(Move m) const {
+    // Both squares have to be real squares.
+    if (!isOnBoard(m.from) || !isOnBoard(m.to)) {
+        return OFF_BOARD;
+    }
+
+    // Moving a piece onto the square it already stands on is not a move.
+    if (samePosition(m.from, m.to)) {
+        return ILLEGAL_SHAPE;
+    }
+
+    // 1. Is there a piece to move at all?
+    const Piece* mover = board.getPieceAt(m.from);
+    if (mover == nullptr) {
+        return NO_PIECE_THERE;
+    }
+
+    // 2. Is it ours?
+    if (mover->getColor() != turn) {
+        return NOT_YOUR_PIECE;
+    }
+
+    // 3. Are we trying to land on one of our own pieces?
+    const Piece* target = board.getPieceAt(m.to);
+    if (target != nullptr && target->getColor() == mover->getColor()) {
+        return FRIENDLY_PIECE_THERE;
+    }
+
+    // 4. Is the move the right shape for this piece? Only the piece knows.
+    if (!mover->isValidMove(m, board)) {
+        return ILLEGAL_SHAPE;
+    }
+
+    return MOVE_OK;
+}
+
+bool GameState::wouldExposeOwnKing(Move m) const {
+    const Piece* mover = board.getPieceAt(m.from);
+    if (mover == nullptr) {
+        return false;
+    }
+    Color mine = mover->getColor();
+
+    // Deep copy, so whatever we do next cannot touch the real game.
+    Board trial(board);
+    trial.movePiece(m);
+
+    return kingIsAttacked(trial, mine);
+}
+
+bool GameState::hasAnyLegalMove(Color c) const {
+    // Try every piece of this colour against every square on the board and
+    // stop the moment one move works.
+    for (int r = 0; r < 8; r++) {
+        for (int col = 0; col < 8; col++) {
+            Position from(r, col);
+            const Piece* p = board.getPieceAt(from);
+            if (p == nullptr || p->getColor() != c) {
+                continue;
+            }
+
+            for (int r2 = 0; r2 < 8; r2++) {
+                for (int c2 = 0; c2 < 8; c2++) {
+                    Position to(r2, c2);
+                    if (samePosition(from, to)) {
+                        continue;
+                    }
+
+                    // Same tests as isLegalMove, but written out here so this
+                    // works for either colour and not just the side to move.
+                    const Piece* target = board.getPieceAt(to);
+                    if (target != nullptr && target->getColor() == c) {
+                        continue;
+                    }
+
+                    Move m(from, to);
+                    if (!p->isValidMove(m, board)) {
+                        continue;
+                    }
+                    if (wouldExposeOwnKing(m)) {
+                        continue;
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
