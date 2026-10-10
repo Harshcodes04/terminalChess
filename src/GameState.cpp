@@ -151,3 +151,48 @@ bool GameState::hasAnyLegalMove(Color c) const {
     return false;
 }
 
+MoveResult GameState::makeMove(Move m) {
+    // Refuse to carry on once the game is finished.
+    GameStatus before = evaluateStatus();
+    if (before == CHECKMATE || before == STALEMATE) {
+        return GAME_ALREADY_OVER;
+    }
+
+    // The cheap tests first.
+    MoveResult result = isLegalMove(m);
+    if (result != MOVE_OK) {
+        return result;
+    }
+
+    // The expensive test last, because it copies the whole board, and by now
+    // the move has already survived everything else.
+    if (wouldExposeOwnKing(m)) {
+        return LEAVES_KING_IN_CHECK;
+    }
+
+    board.movePiece(m);
+
+    // Black moving ends the full move, which is when the number goes up.
+    if (turn == BLACK) {
+        moveNumber++;
+    }
+    turn = otherColor(turn);
+
+    return MOVE_OK;
+}
+
+GameStatus GameState::evaluateStatus() const {
+    bool inCheck = isKingInCheck(turn);
+
+    if (!hasAnyLegalMove(turn)) {
+        if (inCheck) {
+            return CHECKMATE;
+        }
+        return STALEMATE;
+    }
+
+    if (inCheck) {
+        return CHECK;
+    }
+    return ONGOING;
+}
