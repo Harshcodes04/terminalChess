@@ -1,10 +1,8 @@
-// ============================================================
-//  OWNER : Member B
-//  LAYER : Pieces layer
-//  FILE  : src/Pieces.h
-//
-//  Only Member B edits this file. Ask B for changes.
-// ============================================================
+// This file declares all six chess piece classes
+// Pawn, Rook, Knight, Bishop, Queen, and King.
+// Each class says that it will provide its own move checking,
+// board symbol, name, and clone function. The actual code for those
+// functions is written in Pieces.cpp.
 
 #ifndef PIECES_H
 #define PIECES_H

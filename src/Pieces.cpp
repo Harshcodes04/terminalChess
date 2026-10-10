@@ -1,10 +1,8 @@
-// ============================================================
-//  OWNER : Member B
-//  LAYER : Pieces layer
-//  FILE  : src/Pieces.cpp
-//
-//  Only Member B edits this file. Ask B for changes.
-// ============================================================
+// This file has the actual rules for how each piece moves.
+// For example, pawns move forward, rooks move in straight lines,
+// bishops move diagonally, and knights move in an L shape.
+// It also gives each piece its board symbol, name, and clone function.
+// Bigger game rules like turns, check, and checkmate are handled elsewhere.
 
 #include "Pieces.h"
 #include "Board.h"

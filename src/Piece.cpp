@@ -1,10 +1,7 @@
-// ============================================================
-//  OWNER : Member B
-//  LAYER : Pieces layer
-//  FILE  : src/Piece.cpp
-//
-//  Only Member B edits this file. Ask B for changes.
-// ============================================================
+// This file contains the common code used by all pieces.
+// It sets up a piece with its color and position, keeps track of whether
+// it has moved, and provides the basic getter functions.
+// The actual movement rules for each chess piece are written in Pieces.cpp.
 
 #include "Piece.h"
 

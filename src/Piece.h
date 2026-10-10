@@ -1,10 +1,8 @@
-// ============================================================
-//  OWNER : Member B
-//  LAYER : Pieces layer
-//  FILE  : src/Piece.h
-//
-//  Only Member B edits this file. Ask B for changes.
-// ============================================================
+// This file has the base Piece class.
+// Every chess piece shares these basics: its color, current position,
+// whether it has moved, how it checks a move, how it is shown on the board and how it can make a copy of itself.
+// This file only describes what every piece must be able to do.
+// It does not handle turns, check, checkmate, or the full game rules.
 
 #ifndef PIECE_H
 #define PIECE_H
