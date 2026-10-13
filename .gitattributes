@@ -1,0 +1,9 @@
+# Every header in this project is C++, not C. Without this, GitHub guesses
+# from the contents and labels the headers that hold no class as C.
+*.h linguist-language=C++
+
+# The build scripts are tooling, not source code, so they are left out of
+# the language figures.
+Makefile  linguist-detectable=false
+build.bat linguist-detectable=false
+build.sh  linguist-detectable=false
