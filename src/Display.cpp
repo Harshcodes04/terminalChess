@@ -1,10 +1,4 @@
-// ============================================================
-//  OWNER : Member D
-//  LAYER : Interface layer
-//  FILE  : src/Display.cpp
-//
-//  Only Member D edits this file. Ask D for changes.
-// ============================================================
+
 
 #include <iostream>
 #include "Display.h"
