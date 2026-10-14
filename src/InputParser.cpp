@@ -1,10 +1,4 @@
-// ============================================================
-//  OWNER : Member D
-//  LAYER : Interface layer
-//  FILE  : src/InputParser.cpp
-//
-//  Only Member D edits this file. Ask D for changes.
-// ============================================================
+
 
 #include "InputParser.h"
 
