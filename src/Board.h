@@ -1,10 +1,3 @@
-// ============================================================
-//  OWNER : Member A
-//  LAYER : Board layer
-//  FILE  : src/Board.h
-//
-//  Only Member A edits this file. Ask A for changes.
-// ============================================================
 
 #ifndef BOARD_H
 #define BOARD_H
