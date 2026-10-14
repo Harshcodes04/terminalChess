@@ -1,10 +1,3 @@
-// ============================================================
-//  OWNER : Member D
-//  LAYER : Interface layer
-//  FILE  : src/Display.h
-//
-//  Only Member D edits this file. Ask D for changes.
-// ============================================================
 
 #ifndef DISPLAY_H
 #define DISPLAY_H
