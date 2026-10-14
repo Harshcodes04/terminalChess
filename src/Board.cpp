@@ -1,10 +1,3 @@
-// ============================================================
-//  OWNER : Member A
-//  LAYER : Board layer
-//  FILE  : src/Board.cpp
-//
-//  Only Member A edits this file. Ask A for changes.
-// ============================================================
 
 #include "Board.h"
 #include "Pieces.h"
