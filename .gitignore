@@ -1,5 +1,11 @@
+# Build output
 chess
 chess.exe
-*.o
 chess-web
 chess-web.exe
+*.o
+
+# Reports and status, kept off GitHub
+PROGRESS.md
+docs/
+*.docx
