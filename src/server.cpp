@@ -16,11 +16,13 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <cstdlib>
 
 #include "../third_party/httplib.h"
 #include "GameState.h"
 #include "InputParser.h"
 #include "Display.h"
+#include "Bot.h"
 
 // The one game everybody is looking at.
 static GameState game;
@@ -137,6 +139,58 @@ static std::string readFile(const std::string& path) {
     return buffer.str();
 }
 
+// How far ahead the bot looks. 3 is quick and plays sensibly, 4 is
+// stronger and takes about half a second.
+static int botDepth = 3;
+
+// Reads a depth off the request, keeping it inside sensible limits so a
+// stray value cannot make the browser wait forever.
+static int depthFrom(const httplib::Request& req) {
+    std::string text = req.get_param_value("depth");
+    if (text.empty()) {
+        return botDepth;
+    }
+    int d = atoi(text.c_str());
+    if (d < 1) {
+        d = 1;
+    }
+    if (d > 4) {
+        d = 4;
+    }
+    return d;
+}
+
+// Turns a move into text like "e2e4".
+static std::string moveName(Move m) {
+    return squareName(m.from) + squareName(m.to);
+}
+
+// How much worse the played move was than the best one available, counted
+// in hundredths of a pawn. Always zero or more.
+static int lossFor(Color mover, int bestScore, int playedScore) {
+    if (mover == WHITE) {
+        return bestScore - playedScore;   // White wants the score high
+    }
+    return playedScore - bestScore;       // Black wants it low
+}
+
+// The word shown to the player. The bands are the ones chess sites use.
+static std::string verdictFor(int loss) {
+    if (loss <= 0) {
+        return "Best move";
+    }
+    if (loss < 30) {
+        return "Good";
+    }
+    if (loss < 100) {
+        return "Inaccuracy";
+    }
+    if (loss < 200) {
+        return "Mistake";
+    }
+    return "Blunder";
+}
+
 int main() {
     httplib::Server server;
 
@@ -183,12 +237,25 @@ int main() {
     });
 
     // Play a move. The body is just the text, for example "e2e4".
+    // Adding ?coach=1 also has the bot judge the move.
     server.Post("/move", [](const httplib::Request& req, httplib::Response& res) {
         Move m;
         if (!InputParser::parse(req.body, m)) {
             res.set_content("{\"ok\":false,\"reason\":\"I did not understand that move.\"}",
                             "application/json");
             return;
+        }
+
+        bool coaching = (req.get_param_value("coach") == "1");
+        Color mover = game.getTurn();
+
+        // Score every move available before the player commits to one.
+        // The same list gives both the best move and the player's move,
+        // so the position only has to be searched once.
+        std::vector<ScoredMove> ranked;
+        if (coaching) {
+            Bot bot(depthFrom(req));
+            ranked = bot.rankMoves(game);
         }
 
         MoveResult result = game.makeMove(m);
@@ -201,7 +268,80 @@ int main() {
             out += quoted("ok") + ":false,";
             out += quoted("reason") + ":" + quoted(Display::moveResultMessage(result)) + ",";
         }
+
+        // The verdict, if the player asked for coaching and the move was
+        // actually played.
+        if (coaching && result == MOVE_OK && !ranked.empty()) {
+            int bestScore = ranked[0].score;
+            std::string bestMove = moveName(ranked[0].move);
+
+            bool foundPlayed = false;
+            int playedScore = bestScore;
+            for (unsigned int i = 0; i < ranked.size(); i++) {
+                if (samePosition(ranked[i].move.from, m.from) &&
+                    samePosition(ranked[i].move.to, m.to)) {
+                    playedScore = ranked[i].score;
+                    foundPlayed = true;
+                    break;
+                }
+            }
+
+            if (foundPlayed) {
+                int loss = lossFor(mover, bestScore, playedScore);
+                if (loss < 0) {
+                    loss = 0;
+                }
+                out += quoted("verdict") + ":" + quoted(verdictFor(loss)) + ",";
+                out += quoted("loss") + ":" + std::to_string(loss) + ",";
+                out += quoted("best") + ":" + quoted(bestMove) + ",";
+                out += quoted("score") + ":" + std::to_string(playedScore) + ",";
+            }
+        }
+
         out += quoted("state") + ":" + stateToJson();
+        out += "}";
+
+        res.set_content(out, "application/json");
+    });
+
+    // Let the bot play the side whose turn it is.
+    server.Post("/botmove", [](const httplib::Request& req, httplib::Response& res) {
+        Bot bot(depthFrom(req));
+        std::vector<ScoredMove> ranked = bot.rankMoves(game);
+
+        if (ranked.empty()) {
+            res.set_content("{\"ok\":false,\"reason\":\"No moves left.\",\"state\":"
+                            + stateToJson() + "}", "application/json");
+            return;
+        }
+
+        Move chosen = ranked[0].move;
+        game.makeMove(chosen);
+
+        std::string out = "{";
+        out += quoted("ok") + ":true,";
+        out += quoted("move") + ":" + quoted(moveName(chosen)) + ",";
+        out += quoted("score") + ":" + std::to_string(ranked[0].score) + ",";
+        out += quoted("state") + ":" + stateToJson();
+        out += "}";
+
+        res.set_content(out, "application/json");
+    });
+
+    // What the bot would play here, without playing it. Used for a hint.
+    server.Get("/hint", [](const httplib::Request& req, httplib::Response& res) {
+        Bot bot(depthFrom(req));
+        std::vector<ScoredMove> ranked = bot.rankMoves(game);
+
+        if (ranked.empty()) {
+            res.set_content("{\"ok\":false}", "application/json");
+            return;
+        }
+
+        std::string out = "{";
+        out += quoted("ok") + ":true,";
+        out += quoted("move") + ":" + quoted(moveName(ranked[0].move)) + ",";
+        out += quoted("score") + ":" + std::to_string(ranked[0].score);
         out += "}";
 
         res.set_content(out, "application/json");
