@@ -76,6 +76,9 @@ std::string Display::moveResultMessage(MoveResult r) {
     if (r == LEAVES_KING_IN_CHECK) {
         return "You cannot play that, it would leave your king in check.";
     }
+    if (r == CASTLE_THROUGH_CHECK) {
+        return "You cannot castle out of check or across an attacked square.";
+    }
     if (r == GAME_ALREADY_OVER) {
         return "The game is already over.";
     }
@@ -99,6 +102,10 @@ void Display::showHelp() {
     std::cout << "\n";
     std::cout << "  Type a move as the square you are moving from followed by\n";
     std::cout << "  the square you are moving to, for example:  e2e4\n";
+    std::cout << "\n";
+    std::cout << "  Castling is the king moving two squares, so e1g1.\n";
+    std::cout << "  When a pawn reaches the far side add the piece you want,\n";
+    std::cout << "  for example a7a8q for a queen, or n, r or b.\n";
     std::cout << "\n";
     std::cout << "  Other commands:\n";
     std::cout << "    help     show this message\n";

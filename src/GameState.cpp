@@ -93,6 +93,29 @@ MoveResult GameState::isLegalMove(Move m) const {
         return ILLEGAL_SHAPE;
     }
 
+    // 5. Castling has two extra rules that the king itself cannot check,
+    // because they are about the whole game and not about geometry.
+    // A king may not castle out of check, and it may not pass over a
+    // square an enemy piece is attacking. Landing on an attacked square is
+    // already stopped by the ordinary self-check test in makeMove.
+    char symbol = mover->getSymbol();
+    bool isKing = (symbol == 'K' || symbol == 'k');
+    int sideways = m.to.col - m.from.col;
+
+    if (isKing && (sideways == 2 || sideways == -2)) {
+        if (isKingInCheck(turn)) {
+            return CASTLE_THROUGH_CHECK;
+        }
+
+        // Walk the king one square towards where it is going and see
+        // whether it would be attacked standing there.
+        int step = (sideways > 0) ? 1 : -1;
+        Move halfway(m.from, Position(m.from.row, m.from.col + step));
+        if (wouldExposeOwnKing(halfway)) {
+            return CASTLE_THROUGH_CHECK;
+        }
+    }
+
     return MOVE_OK;
 }
 
