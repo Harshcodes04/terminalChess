@@ -94,8 +94,20 @@ bool Pawn::isValidMove(Move m, const Board& board) const {
         }
     }
 
-    // TODO (remaining work): en passant, and promotion when the pawn reaches
-    // the last row. Neither is handled yet.
+    // En passant. If the enemy has just jumped a pawn two squares past us,
+    // the board remembers the square it skipped. We may step diagonally
+    // into that square even though it is empty, and the board removes the
+    // pawn that jumped.
+    if ((dc == 1 || dc == -1) && dr == dir && target == nullptr) {
+        Position skipped = board.getEnPassantSquare();
+        if (skipped.row == m.to.row && skipped.col == m.to.col) {
+            return true;
+        }
+    }
+
+    // Promotion needs no code here. Reaching the last row is an ordinary
+    // pawn move as far as this function is concerned, and the board swaps
+    // the pawn for the new piece once the move is played.
     return false;
 }
 
@@ -244,8 +256,6 @@ King::King(Color c, Position p) : Piece(c, p) {
 }
 
 bool King::isValidMove(Move m, const Board& board) const {
-    // The board is not looked at here either. The king only moves one square,
-    // so there is never anything in between to block it.
     int dr = absValue(m.to.row - m.from.row);
     int dc = absValue(m.to.col - m.from.col);
 
@@ -254,7 +264,42 @@ bool King::isValidMove(Move m, const Board& board) const {
         return true;
     }
 
-    // TODO (remaining work): castling.
+    // Castling: the king steps two squares sideways along its own row and
+    // the rook jumps over it. Everything below is geometry only. Whether
+    // the king would be moving out of, through or into check is a question
+    // about the whole game, so the rules layer answers that part.
+    if (dr == 0 && dc == 2 && !hasMoved()) {
+        int row = m.from.row;
+
+        // Which rook, and which squares have to be empty between them.
+        int rookCol = (m.to.col > m.from.col) ? 7 : 0;
+        int firstEmpty = (m.to.col > m.from.col) ? 5 : 1;
+        int lastEmpty  = (m.to.col > m.from.col) ? 6 : 3;
+
+        const Piece* rook = board.getPieceAt(Position(row, rookCol));
+        if (rook == nullptr) {
+            return false;
+        }
+        if (rook->getColor() != color) {
+            return false;
+        }
+        if (rook->getSymbol() != 'R' && rook->getSymbol() != 'r') {
+            return false;
+        }
+        if (rook->hasMoved()) {
+            return false;
+        }
+
+        // Nothing may stand between the king and the rook.
+        for (int c = firstEmpty; c <= lastEmpty; c++) {
+            if (!board.isEmpty(Position(row, c))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     return false;
 }
 
