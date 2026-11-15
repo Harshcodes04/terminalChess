@@ -106,3 +106,39 @@ which reuses the loop that `hasAnyLegalMove()` already ran.
 
 `third_party/httplib.h` is cpp-httplib, a single header HTTP server under
 the MIT licence. It is the only outside code in the project.
+
+### The coach and the computer opponent
+
+`src/Bot.h` and `src/Bot.cpp` add a computer player that doubles as a coach.
+It knows no chess rules of its own: it asks `GameState` for the legal moves,
+plays them on a copy of the game and looks a few moves ahead. The copy is the
+same deep copy the rules layer already uses to test for check, so the bot only
+exists because `Board` has a real copy constructor and `Piece` has `clone()`.
+
+How it decides:
+
+- **Counting the position.** Each piece is worth the usual amount, a pawn 100
+  and a queen 900. Knights and bishops get a bonus near the middle of the board
+  and pawns get one for advancing.
+- **Looking ahead.** Minimax with alpha-beta pruning. White tries to push the
+  score up and Black tries to push it down, and pruning throws away lines the
+  other player would never allow.
+
+Looking three moves ahead takes about 0.05 seconds and four takes about half a
+second, which is why four is the deepest setting offered.
+
+Judging a move costs nothing extra. Scoring every legal move before the player
+commits gives both the best move and the player's move from the same search,
+and the gap between them is the verdict:
+
+| Pawns lost | Verdict |
+| --- | --- |
+| none | Best move |
+| under 0.3 | Good |
+| 0.3 to 1.0 | Inaccuracy |
+| 1.0 to 2.0 | Mistake |
+| over 2.0 | Blunder |
+
+When the move was worse than Good the board outlines the move that should have
+been played. The computer can also take a side outright, and there is a hint
+button that shows a good move without playing it.
