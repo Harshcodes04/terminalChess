@@ -3,6 +3,7 @@
 #ifndef GAMESTATE_H
 #define GAMESTATE_H
 
+#include <vector>
 #include "Board.h"
 #include "Move.h"
 #include "Position.h"
@@ -59,6 +60,11 @@ public:
     // or tells you exactly why it refused.
     MoveResult makeMove(Move m);
 
+    // Throws the current game away and sets up a fresh one. Needed because
+    // one GameState cannot be assigned over another: the board deliberately
+    // blocks that, so that nobody can shallow copy it by accident.
+    void reset();
+
     // ONGOING, CHECK, CHECKMATE or STALEMATE for the side that has to move now.
     GameStatus evaluateStatus() const;
 
@@ -66,6 +72,11 @@ public:
     Color getTurn() const;
 
     int getMoveNumber() const;
+
+    // Every square the piece on this square may legally move to. Used by the
+    // screen to light up the squares when a player picks a piece up. Returns
+    // an empty list if the square is empty or holds an enemy piece.
+    std::vector<Position> getLegalMoves(Position from) const;
 
     // The interface needs to see the board to draw it. Const, so it can look
     // but not touch.

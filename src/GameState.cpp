@@ -38,6 +38,12 @@ GameState::GameState() {
     moveNumber = 1;
 }
 
+void GameState::reset() {
+    board.setupInitialPosition();
+    turn = WHITE;
+    moveNumber = 1;
+}
+
 Color GameState::getTurn() const {
     return turn;
 }
@@ -188,4 +194,42 @@ GameStatus GameState::evaluateStatus() const {
         return CHECK;
     }
     return ONGOING;
+}
+
+std::vector<Position> GameState::getLegalMoves(Position from) const {
+    std::vector<Position> moves;
+
+    // There has to be a piece there, and it has to belong to the player
+    // whose turn it is.
+    const Piece* p = board.getPieceAt(from);
+    if (p == nullptr || p->getColor() != turn) {
+        return moves;
+    }
+
+    // Same tests as makeMove runs, but instead of stopping at the first good
+    // move we collect every square that works.
+    for (int r = 0; r < 8; r++) {
+        for (int c = 0; c < 8; c++) {
+            Position to(r, c);
+            if (samePosition(from, to)) {
+                continue;
+            }
+
+            const Piece* target = board.getPieceAt(to);
+            if (target != nullptr && target->getColor() == p->getColor()) {
+                continue;
+            }
+
+            Move m(from, to);
+            if (!p->isValidMove(m, board)) {
+                continue;
+            }
+            if (wouldExposeOwnKing(m)) {
+                continue;
+            }
+
+            moves.push_back(to);
+        }
+    }
+    return moves;
 }
