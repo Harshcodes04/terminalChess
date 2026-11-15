@@ -214,6 +214,42 @@
     font-size: 11px; color: var(--text);
   }
   button:disabled { opacity: .5; cursor: default; }
+
+  /* ---------- coach and computer ---------- */
+  .verdict {
+    display: inline-block;
+    font-size: 13px; font-weight: 700;
+    padding: 4px 11px; border-radius: 5px;
+    margin-bottom: 2px;
+  }
+  .v-best       { background: #1e4535; color: #6ee7b7; }
+  .v-good       { background: #1e3a45; color: #7dd3fc; }
+  .v-inaccuracy { background: #4a401c; color: #fcd34d; }
+  .v-mistake    { background: #4d3418; color: #fdba74; }
+  .v-blunder    { background: #4d1f1c; color: #fca5a5; }
+  .vline { font-size: 12px; color: var(--dim); margin-top: 7px; line-height: 1.6; }
+  .vline b { color: var(--text); font-family: ui-monospace, Consolas, monospace; }
+
+  .row2 { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .row2 label { font-size: 12.5px; color: var(--dim); flex: 1; }
+  select {
+    background: #272b33; color: var(--text);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 5px 7px; font-size: 12.5px; font-family: inherit;
+  }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+  .chk input { width: 15px; height: 15px; accent-color: var(--legal); }
+
+  /* the move the coach says you should have played */
+  .sq.better::after {
+    content: '';
+    position: absolute; inset: 0;
+    border: 3px dashed #7dd3fc;
+    border-radius: 2px;
+    z-index: 4;
+    pointer-events: none;
+  }
+  .thinking { font-size: 12px; color: var(--pick); margin-top: 7px; }
 </style>
 </head>
 <body>
@@ -245,6 +281,39 @@
       <div class="card">
         <h2>Moves</h2>
         <div class="moves" id="moves"><span style="color:var(--dim);font-size:12px">no moves yet</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Coach</h2>
+        <div class="chk">
+          <input type="checkbox" id="coachOn" checked>
+          <label for="coachOn">Judge my moves</label>
+        </div>
+        <div id="verdictBox" style="margin-top:9px"></div>
+        <div class="vline" id="verdictLine"></div>
+        <button id="hint" style="margin-top:10px">Show me a good move</button>
+      </div>
+
+      <div class="card">
+        <h2>Computer</h2>
+        <div class="row2">
+          <label for="botSide">Plays</label>
+          <select id="botSide">
+            <option value="off">nobody</option>
+            <option value="black">Black</option>
+            <option value="white">White</option>
+          </select>
+        </div>
+        <div class="row2">
+          <label for="depth">Strength</label>
+          <select id="depth">
+            <option value="1">easy</option>
+            <option value="2">normal</option>
+            <option value="3" selected>good</option>
+            <option value="4">slow but strong</option>
+          </select>
+        </div>
+        <div class="thinking" id="thinking"></div>
       </div>
 
       <div class="card" id="voiceCard">
@@ -284,6 +353,8 @@ let picked = null;     // square the player has picked up, e.g. "e2"
 let legal = [];        // squares the engine says are legal from there
 let flipped = false;
 let history = [];      // move list, kept in the browser for display
+let better = null;     // the move the coach says was better, e.g. "g1f3"
+let busy = false;      // true while the bot is thinking
 let taken = [];        // captured pieces, worked out by comparing boards
 
 const $ = id => document.getElementById(id);
@@ -330,6 +401,12 @@ function draw() {
 
     if (cell.square === picked) sq.classList.add('picked');
     if (cell.square === checkSquare) sq.classList.add('incheck');
+
+    // The coach outlines the move you should have played instead.
+    if (better && (cell.square === better.slice(0, 2) ||
+                   cell.square === better.slice(2, 4))) {
+      sq.classList.add('better');
+    }
 
     // The green dots. This is the part that comes straight from the engine.
     if (legal.includes(cell.square)) {
@@ -448,8 +525,14 @@ async function clickSquare(square) {
 async function play(moveText) {
   const before = state.board.slice();
 
-  const res = await fetch('/move', { method: 'POST', body: moveText });
+  const coaching = $('coachOn').checked;
+  const depth = $('depth').value;
+  const url = '/move?depth=' + depth + (coaching ? '&coach=1' : '');
+
+  if (coaching) { $('thinking').textContent = 'Thinking...'; }
+  const res = await fetch(url, { method: 'POST', body: moveText });
   const result = await res.json();
+  $('thinking').textContent = '';
 
   if (!result.ok) {
     say(result.reason, 'bad');
@@ -476,7 +559,77 @@ async function play(moveText) {
   picked = null;
   legal = [];
   say('');
+
+  showVerdict(result);
   draw();
+
+  // Let the computer reply if it is playing this side.
+  await maybeBotReply();
+}
+
+// Shows what the coach thought of the move just played.
+function showVerdict(result) {
+  better = null;
+  const box = $('verdictBox');
+  const line = $('verdictLine');
+
+  if (!result.verdict) {
+    box.innerHTML = '';
+    line.innerHTML = '';
+    return;
+  }
+
+  const kind = result.verdict.toLowerCase().replace('best move', 'best');
+  box.innerHTML = '<span class="verdict v-' + kind + '">' + result.verdict + '</span>';
+
+  if (result.verdict === 'Best move' || result.verdict === 'Good') {
+    line.innerHTML = 'Cost you ' + (result.loss / 100).toFixed(2) + ' pawns.';
+  } else {
+    // Only show the better move when the player actually went wrong.
+    better = result.best;
+    line.innerHTML = 'Cost you ' + (result.loss / 100).toFixed(2) +
+                     ' pawns. Better was <b>' +
+                     result.best.slice(0, 2) + '\u2013' + result.best.slice(2, 4) +
+                     '</b>, outlined on the board.';
+  }
+}
+
+// If the computer plays the side whose turn it now is, let it move.
+async function maybeBotReply() {
+  const side = $('botSide').value;
+  if (side === 'off' || !state) return;
+  if (state.status === 'checkmate' || state.status === 'stalemate') return;
+  if (state.turn !== side) return;
+  if (busy) return;
+
+  busy = true;
+  $('thinking').textContent = 'Computer is thinking...';
+
+  try {
+    const res = await fetch('/botmove?depth=' + $('depth').value, { method: 'POST' });
+    const result = await res.json();
+
+    if (result.ok) {
+      const before = state.board.slice();
+      const after = result.state.board;
+      const dest = result.move.slice(2, 4);
+      for (let i = 0; i < before.length; i++) {
+        if (before[i].square === dest && before[i].piece &&
+            before[i].piece !== after[i].piece) {
+          taken.push(before[i].piece);
+        }
+      }
+      history.push(result.move.slice(0, 2) + '\u2013' + result.move.slice(2, 4));
+      state = result.state;
+      better = null;
+      say('Computer played ' + result.move.slice(0, 2) + '\u2013' +
+          result.move.slice(2, 4) + '.', 'good');
+      draw();
+    }
+  } finally {
+    busy = false;
+    $('thinking').textContent = '';
+  }
 }
 
 async function load() {
@@ -485,14 +638,33 @@ async function load() {
   draw();
 }
 
+$('hint').addEventListener('click', async () => {
+  if (!state || busy) return;
+  $('thinking').textContent = 'Thinking...';
+  const res = await fetch('/hint?depth=' + $('depth').value);
+  const result = await res.json();
+  $('thinking').textContent = '';
+  if (result.ok) {
+    better = result.move;
+    say('Try ' + result.move.slice(0, 2) + '\u2013' + result.move.slice(2, 4) + '.', 'good');
+    draw();
+  }
+});
+
+// If the computer is switched on for the side already to move, let it go.
+$('botSide').addEventListener('change', () => { maybeBotReply(); });
+
 $('flip').addEventListener('click', () => { flipped = !flipped; draw(); });
 
 $('reset').addEventListener('click', async () => {
   const res = await fetch('/reset', { method: 'POST' });
   state = await res.json();
-  picked = null; legal = []; history = []; taken = [];
+  picked = null; legal = []; history = []; taken = []; better = null;
+  $('verdictBox').innerHTML = '';
+  $('verdictLine').innerHTML = '';
   say('New game.', 'good');
   draw();
+  await maybeBotReply();
 });
 
 // ---------------------------------------------------------------
