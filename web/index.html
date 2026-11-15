@@ -848,7 +848,8 @@ async function handleSpeech(text) {
   showHeard(text, squares);
 
   if (squares.length === 0) {
-    say('I did not catch a square. Try saying "e2 to e4".', 'bad');
+    say('Heard you, but no square in that. Try "e2 to e4", or the clearer ' +
+        '"echo two echo four".', 'bad');
     return;
   }
 
@@ -869,6 +870,27 @@ async function handleSpeech(text) {
   spokenPromotion = 0;
 }
 
+// Plain English for each thing the speech engine can complain about, so a
+// failure says what to do instead of silently doing nothing.
+function speechProblem(code) {
+  if (code === 'not-allowed' || code === 'service-not-allowed') {
+    return 'Microphone blocked. Click the padlock in the address bar and allow it.';
+  }
+  if (code === 'no-speech') {
+    return 'Did not hear anything. Speak a little louder.';
+  }
+  if (code === 'audio-capture') {
+    return 'No microphone found. Check it is plugged in and selected.';
+  }
+  if (code === 'network') {
+    return 'Speech needs the internet, and the connection failed.';
+  }
+  if (code === 'aborted') {
+    return '';          // normal when restarting, not worth showing
+  }
+  return 'Speech problem: ' + code;
+}
+
 function startVoice() {
   var Engine = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!Engine) {
@@ -876,33 +898,83 @@ function startVoice() {
     return;
   }
 
+  // Speech only works on a secure page. localhost counts as secure, but an
+  // address like 192.168.x.x over plain http does not, which is why voice
+  // is silent on a phone unless the page is opened through localhost.
+  if (!window.isSecureContext) {
+    say('Voice needs a secure page. Open it as localhost on this computer.', 'bad');
+    $('heard').textContent = 'This address is not treated as secure by the browser.';
+    return;
+  }
+
   recog = new Engine();
   recog.lang = 'en-IN';          // change to en-US if that hears you better
   recog.continuous = true;
-  recog.interimResults = false;
+
+  // Interim results are shown but never acted on. They are what tells the
+  // player that the microphone really is picking their voice up.
+  recog.interimResults = true;
+
+  recog.onaudiostart = function () {
+    $('micState').textContent = 'Listening';
+  };
 
   recog.onresult = function (e) {
-    var said = e.results[e.results.length - 1][0].transcript.trim();
-    handleSpeech(said);
+    // Walk only the results that arrived this time.
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      var said = e.results[i][0].transcript.trim();
+      if (!said) {
+        continue;
+      }
+      if (e.results[i].isFinal) {
+        handleSpeech(said);
+      } else {
+        // Still talking. Show it so the player can see it is working.
+        $('heard').innerHTML = '\u201c' + said + '\u2026\u201d';
+      }
+    }
   };
 
   recog.onerror = function (e) {
-    if (e.error === 'not-allowed') {
-      say('Microphone blocked. Allow it from the address bar.', 'bad');
+    var message = speechProblem(e.error);
+    if (message) {
+      say(message, 'bad');
+    }
+    // These two mean it will never work until the player fixes something,
+    // so stop pretending to listen.
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed' ||
+        e.error === 'audio-capture') {
       setMic(false);
     }
   };
 
   // The browser stops listening by itself after a pause, so start it again.
+  // A short wait avoids the error you get from restarting too quickly.
   recog.onend = function () {
-    if (listening) {
-      try { recog.start(); } catch (err) { /* already starting */ }
+    if (!listening) {
+      return;
     }
+    setTimeout(function () {
+      if (!listening) {
+        return;
+      }
+      try {
+        recog.start();
+      } catch (err) {
+        // Already running, which is harmless.
+      }
+    }, 250);
   };
 
-  recog.start();
+  try {
+    recog.start();
+  } catch (err) {
+    say('Could not start listening: ' + err.message, 'bad');
+    return;
+  }
+
   setMic(true);
-  say('Listening. Say a square.', 'good');
+  say('Listening. Say a square, for example e2 to e4.', 'good');
 }
 
 function stopVoice() {
