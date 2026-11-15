@@ -811,6 +811,7 @@ function extractSquares(text) {
 
 var recog = null;
 var listening = false;
+var networkTries = 0;   // how many times the speech service has refused us
 
 function setMic(on) {
   listening = on;
@@ -883,7 +884,12 @@ function speechProblem(code) {
     return 'No microphone found. Check it is plugged in and selected.';
   }
   if (code === 'network') {
-    return 'Speech needs the internet, and the connection failed.';
+    // This almost never means the player is offline. The browser could not
+    // reach the speech service, which happens when the page is open inside
+    // an app window rather than in Chrome or Edge itself, because those
+    // built-in browsers do not carry a key for the service.
+    return 'Could not reach the speech service. Open this page in Chrome or ' +
+           'Edge itself rather than inside another app.';
   }
   if (code === 'aborted') {
     return '';          // normal when restarting, not worth showing
@@ -901,6 +907,17 @@ function startVoice() {
   // Speech only works on a secure page. localhost counts as secure, but an
   // address like 192.168.x.x over plain http does not, which is why voice
   // is silent on a phone unless the page is opened through localhost.
+  // Opened inside another app's window rather than in a browser. Those
+  // windows are built on Chrome but do not carry a key for the speech
+  // service, so listening would fail with a confusing network error.
+  if (navigator.userAgent.indexOf('Claude/') >= 0 ||
+      navigator.userAgent.indexOf('Electron/') >= 0) {
+    say('Voice needs Chrome or Edge itself. Open http://localhost:8080 there.', 'bad');
+    $('heard').textContent = 'This window is part of another app, so the ' +
+                             'speech service will not answer it.';
+    return;
+  }
+
   if (!window.isSecureContext) {
     say('Voice needs a secure page. Open it as localhost on this computer.', 'bad');
     $('heard').textContent = 'This address is not treated as secure by the browser.';
@@ -917,6 +934,7 @@ function startVoice() {
 
   recog.onaudiostart = function () {
     $('micState').textContent = 'Listening';
+    networkTries = 0;      // audio is flowing, so forget earlier failures
   };
 
   recog.onresult = function (e) {
@@ -936,12 +954,25 @@ function startVoice() {
   };
 
   recog.onerror = function (e) {
+    // A network error is sometimes just a hiccup, so try again a couple of
+    // times before telling the player anything.
+    if (e.error === 'network') {
+      networkTries++;
+      if (networkTries <= 2) {
+        $('heard').textContent = 'Reaching the speech service...';
+        return;
+      }
+      say(speechProblem('network'), 'bad');
+      setMic(false);
+      return;
+    }
+
     var message = speechProblem(e.error);
     if (message) {
       say(message, 'bad');
     }
-    // These two mean it will never work until the player fixes something,
-    // so stop pretending to listen.
+    // These mean it will never work until the player fixes something, so
+    // stop pretending to listen.
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed' ||
         e.error === 'audio-capture') {
       setMic(false);
@@ -966,6 +997,7 @@ function startVoice() {
     }, 250);
   };
 
+  networkTries = 0;
   try {
     recog.start();
   } catch (err) {
