@@ -250,6 +250,33 @@
     pointer-events: none;
   }
   .thinking { font-size: 12px; color: var(--pick); margin-top: 7px; }
+
+  /* ---------- promotion chooser ---------- */
+  .shade {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  .shade.show { display: flex; }
+  .picker {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,.5);
+  }
+  .picker h3 { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
+  .picker .choices { display: flex; gap: 10px; }
+  .picker button {
+    width: 62px; height: 62px;
+    font-size: 34px; line-height: 1;
+    padding: 0; margin: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .picker .label { font-size: 11px; color: var(--dim); margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -336,6 +363,14 @@
   </div>
 </div>
 
+<div class="shade" id="promoShade">
+  <div class="picker">
+    <h3>Pawn reached the end. What should it become?</h3>
+    <div class="choices" id="promoChoices"></div>
+    <div class="label">Click one to finish the move</div>
+  </div>
+</div>
+
 <script>
 // The browser never knows a single rule of chess. Every question goes to the
 // C++ engine: which squares are legal, whether a move was allowed, and
@@ -355,6 +390,7 @@ let flipped = false;
 let history = [];      // move list, kept in the browser for display
 let better = null;     // the move the coach says was better, e.g. "g1f3"
 let busy = false;      // true while the bot is thinking
+let spokenPromotion = 0;  // set when the player said "queen", "knight" and so on
 let taken = [];        // captured pieces, worked out by comparing boards
 
 const $ = id => document.getElementById(id);
@@ -488,13 +524,64 @@ function say(text, kind) {
   m.className = 'msg' + (kind ? ' ' + kind : '');
 }
 
+// Is this move a pawn arriving at the far side?
+function isPromotion(from, to) {
+  const p = pieceAt(from);
+  if (p !== 'P' && p !== 'p') return false;
+  const rank = to[1];
+  return (p === 'P' && rank === '8') || (p === 'p' && rank === '1');
+}
+
+// Shows the four pieces and waits for the player to pick one. Gives back
+// the letter the engine expects, or nothing if they changed their mind.
+function askPromotion() {
+  // If the player already said which piece they want, do not ask again.
+  if (spokenPromotion) {
+    return Promise.resolve(spokenPromotion);
+  }
+
+  return new Promise(resolve => {
+    const white = (state.turn === 'white');
+    const options = [
+      { letter: 'q', glyph: white ? '\u2655' : '\u265B', name: 'Queen'  },
+      { letter: 'r', glyph: white ? '\u2656' : '\u265C', name: 'Rook'   },
+      { letter: 'b', glyph: white ? '\u2657' : '\u265D', name: 'Bishop' },
+      { letter: 'n', glyph: white ? '\u2658' : '\u265E', name: 'Knight' }
+    ];
+
+    const box = $('promoChoices');
+    box.innerHTML = '';
+    options.forEach(o => {
+      const b = document.createElement('button');
+      b.textContent = o.glyph;
+      b.title = o.name;
+      b.addEventListener('click', () => {
+        $('promoShade').classList.remove('show');
+        resolve(o.letter);
+      });
+      box.appendChild(b);
+    });
+
+    $('promoShade').classList.add('show');
+  });
+}
+
 async function clickSquare(square) {
   if (!state) return;
   if (state.status === 'checkmate' || state.status === 'stalemate') return;
 
   // Second click: if it is one of the lit squares, play the move.
   if (picked && legal.includes(square)) {
-    await play(picked + square);
+    const from = picked;
+    // A pawn landing on the far row has to be turned into something else,
+    // so ask first and send the answer along with the move.
+    if (isPromotion(from, square)) {
+      const choice = await askPromotion();
+      if (!choice) { picked = null; legal = []; draw(); return; }
+      await play(from + square + choice);
+    } else {
+      await play(from + square);
+    }
     return;
   }
 
@@ -765,12 +852,21 @@ async function handleSpeech(text) {
     return;
   }
 
+  // The player can also say which piece they want when promoting.
+  let spoken = 0;
+  if (lower.indexOf('queen') >= 0) spoken = 'q';
+  else if (lower.indexOf('rook') >= 0 || lower.indexOf('castle piece') >= 0) spoken = 'r';
+  else if (lower.indexOf('bishop') >= 0) spoken = 'b';
+  else if (lower.indexOf('knight') >= 0 || lower.indexOf('horse') >= 0) spoken = 'n';
+  if (spoken) { spokenPromotion = spoken; }
+
   // Two squares is a whole move. One square behaves exactly like a click,
   // so saying "e2" picks the pawn up and saying "e4" afterwards moves it.
   await clickSquare(squares[0]);
   if (squares.length >= 2) {
     await clickSquare(squares[1]);
   }
+  spokenPromotion = 0;
 }
 
 function startVoice() {

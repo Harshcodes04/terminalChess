@@ -142,3 +142,28 @@ and the gap between them is the verdict:
 When the move was worse than Good the board outlines the move that should have
 been played. The computer can also take a side outright, and there is a hint
 button that shows a good move without playing it.
+
+## The three special chess rules
+
+All three are now implemented, so the game follows the full rules of chess.
+
+**Castling.** Type the king moving two squares, so `e1g1` for the short side
+and `e1c1` for the long side. The rook jumps over by itself. The king checks
+the plain conditions: neither it nor the rook has moved, and the squares
+between them are empty. The two conditions it cannot check on its own, that
+the king is not in check and does not pass over an attacked square, are
+handled by the rules layer, because they are questions about the whole game
+rather than about geometry.
+
+**En passant.** When a pawn jumps two squares past an enemy pawn, the board
+remembers the square it skipped. An enemy pawn may step diagonally into that
+square on the very next move, and the board removes the pawn that jumped. The
+chance lasts one move only, because the square is cleared as soon as anything
+else is played. The skipped square is stored on the board rather than kept as
+history, since it is part of the position.
+
+**Promotion.** A pawn reaching the far row turns into another piece. In the
+terminal, add the letter to the move: `a7a8q` for a queen, or `n`, `r`, `b`.
+In the browser a small window appears with the four pieces to choose from, and
+with voice you can say the piece name along with the move. Leaving the choice
+out gives a queen.
