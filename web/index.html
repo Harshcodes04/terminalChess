@@ -209,6 +209,7 @@
   }
   .heard b { color: var(--legal); font-style: normal; }
   .vhelp { font-size: 11.5px; color: var(--dim); margin-top: 9px; line-height: 1.65; }
+  #voiceReport { font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
   .vhelp code {
     background: #2a2e36; padding: 1px 5px; border-radius: 3px;
     font-size: 11px; color: var(--text);
@@ -348,6 +349,8 @@
         <div class="mic"><span class="led" id="led"></span><span id="micState">Off</span></div>
         <div class="heard" id="heard"></div>
         <button id="mic" style="margin-top:10px">Start listening</button>
+        <button id="voiceCheck" style="margin-top:7px">Check voice setup</button>
+        <div class="vhelp" id="voiceReport"></div>
         <div class="vhelp">
           Say a square to pick a piece up, then another to move it &mdash;
           <code>e2</code> then <code>e4</code>. Or both at once:
@@ -998,6 +1001,40 @@ function startVoice() {
   };
 
   networkTries = 0;
+
+  // Ask for the microphone openly first. The speech engine would ask by
+  // itself, but doing it this way is what actually makes the browser show
+  // its permission box, and it tells us plainly if the answer is no.
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function (stream) {
+        // We only wanted the permission, so let the microphone go again
+        // and leave the listening to the speech engine.
+        var tracks = stream.getTracks();
+        for (var i = 0; i < tracks.length; i++) {
+          tracks[i].stop();
+        }
+        beginListening();
+      })
+      .catch(function (err) {
+        if (err.name === 'NotAllowedError') {
+          say('Microphone refused. Click the padlock in the address bar, ' +
+              'set Microphone to Allow, then reload.', 'bad');
+        } else if (err.name === 'NotFoundError') {
+          say('No microphone found on this computer.', 'bad');
+        } else {
+          say('Microphone problem: ' + err.name, 'bad');
+        }
+        setMic(false);
+      });
+    return;
+  }
+
+  beginListening();
+}
+
+// Starts the speech engine once the microphone is allowed.
+function beginListening() {
   try {
     recog.start();
   } catch (err) {
@@ -1016,6 +1053,45 @@ function stopVoice() {
   }
   say('');
 }
+
+// Walks through everything voice needs and reports what it finds, so a
+// failure can be pinned down instead of guessed at.
+$('voiceCheck').addEventListener('click', async function () {
+  var lines = [];
+  var ua = navigator.userAgent;
+
+  var inApp = (ua.indexOf('Claude/') >= 0 || ua.indexOf('Electron/') >= 0);
+  lines.push((inApp ? 'NO  ' : 'OK  ') + 'Browser: ' +
+             (inApp ? 'an app window, not Chrome or Edge itself'
+                    : 'a real browser window'));
+
+  var engine = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  lines.push((engine ? 'OK  ' : 'NO  ') + 'Speech support: ' +
+             (engine ? 'present' : 'missing, so use Chrome or Edge'));
+
+  lines.push((window.isSecureContext ? 'OK  ' : 'NO  ') + 'Address: ' +
+             location.origin +
+             (window.isSecureContext ? '' : '  (needs localhost or https)'));
+
+  lines.push((navigator.onLine ? 'OK  ' : 'NO  ') + 'Network: ' +
+             (navigator.onLine ? 'connected' : 'offline'));
+
+  // Permission, asked for openly so the browser shows its box.
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    var tracks = stream.getTracks();
+    for (var i = 0; i < tracks.length; i++) {
+      tracks[i].stop();
+    }
+    lines.push('OK  Microphone: allowed');
+  } catch (err) {
+    lines.push('NO  Microphone: ' + err.name +
+               (err.name === 'NotAllowedError'
+                  ? '  (allow it from the padlock in the address bar)' : ''));
+  }
+
+  $('voiceReport').innerHTML = lines.join('<br>');
+});
 
 $('mic').addEventListener('click', function () {
   if (listening) { stopVoice(); } else { startVoice(); }
