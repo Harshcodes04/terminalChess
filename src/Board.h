@@ -14,6 +14,11 @@ class Board {
 private:
     Piece* grid[8][8];
 
+    // When a pawn has just jumped two squares, this holds the square it
+    // skipped over, because that is the square an enemy pawn may capture
+    // into. Row -1 means there is no such square right now.
+    Position enPassantSquare;
+
     // Deletes every piece and sets all 64 squares back to empty.
     void clearBoard();
 
@@ -52,6 +57,11 @@ public:
     // The only function that changes the board. Moves the piece and deletes
     // whatever it captured.
     void movePiece(Move m);
+
+    // The square a pawn may capture into by en passant, or row -1 if there
+    // is none. It is set by movePiece whenever a pawn jumps two squares and
+    // cleared by the very next move, because the chance only lasts one turn.
+    Position getEnPassantSquare() const;
 
     // Where is this colour's king? Returns row -1 if there is no king,
     // which should never happen in a real game.

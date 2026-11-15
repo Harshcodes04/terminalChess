@@ -8,6 +8,7 @@ Board::Board() {
             grid[r][c] = nullptr;
         }
     }
+    enPassantSquare = Position(-1, -1);
 }
 
 Board::~Board() {
@@ -15,6 +16,10 @@ Board::~Board() {
 }
 
 Board::Board(const Board& other) {
+    // The en passant chance is part of the position, so a copy of the board
+    // has to carry it as well, otherwise a simulated move would lose it.
+    enPassantSquare = other.enPassantSquare;
+
     for (int r = 0; r < 8; r++) {
         for (int c = 0; c < 8; c++) {
             if (other.grid[r][c] == nullptr) {
@@ -42,6 +47,7 @@ void Board::clearBoard() {
 void Board::setupInitialPosition() {
     // Start from a clean board in case this is called twice.
     clearBoard();
+    enPassantSquare = Position(-1, -1);
 
     // Pawns.
     for (int c = 0; c < 8; c++) {
@@ -131,6 +137,29 @@ void Board::movePiece(Move m) {
         return;
     }
 
+    char symbol = mover->getSymbol();
+    bool isPawn = (symbol == 'P' || symbol == 'p');
+    bool isKing = (symbol == 'K' || symbol == 'k');
+
+    // Remember the old en passant square before we change it, because the
+    // move being played now may be the capture that uses it.
+    Position oldEnPassant = enPassantSquare;
+    enPassantSquare = Position(-1, -1);
+
+    // --- en passant capture ---
+    // A pawn moving diagonally onto an empty square can only be an en
+    // passant capture. The pawn it takes is beside the start square, not
+    // on the square the capturing pawn lands on.
+    if (isPawn && m.from.col != m.to.col && grid[m.to.row][m.to.col] == nullptr) {
+        if (oldEnPassant.row == m.to.row && oldEnPassant.col == m.to.col) {
+            Piece* victim = grid[m.from.row][m.to.col];
+            if (victim != nullptr) {
+                delete victim;
+                grid[m.from.row][m.to.col] = nullptr;
+            }
+        }
+    }
+
     // Anything already standing on the destination is captured, and since the
     // board owns its pieces the board is the one that deletes it.
     if (grid[m.to.row][m.to.col] != nullptr) {
@@ -141,6 +170,61 @@ void Board::movePiece(Move m) {
     grid[m.to.row][m.to.col] = mover;
     grid[m.from.row][m.from.col] = nullptr;
     mover->setPosition(m.to);
+
+    // --- castling ---
+    // The king has already moved two squares sideways, so the rook on that
+    // side has to jump over it and land beside it.
+    if (isKing && (m.to.col - m.from.col == 2 || m.from.col - m.to.col == 2)) {
+        int row = m.from.row;
+        int rookFrom = (m.to.col > m.from.col) ? 7 : 0;
+        int rookTo   = (m.to.col > m.from.col) ? 5 : 3;
+
+        Piece* rook = grid[row][rookFrom];
+        if (rook != nullptr) {
+            grid[row][rookTo] = rook;
+            grid[row][rookFrom] = nullptr;
+            rook->setPosition(Position(row, rookTo));
+        }
+    }
+
+    // --- a pawn jumping two squares ---
+    // Note the square it skipped, so that an enemy pawn gets its one
+    // chance to capture into it on the very next move.
+    if (isPawn && (m.to.row - m.from.row == 2 || m.from.row - m.to.row == 2)) {
+        int middle = (m.from.row + m.to.row) / 2;
+        enPassantSquare = Position(middle, m.from.col);
+    }
+
+    // --- promotion ---
+    // A pawn that reaches the far row turns into something better. The
+    // old pawn is deleted and a brand new piece takes its place.
+    if (isPawn && (m.to.row == 0 || m.to.row == 7)) {
+        Color colour = mover->getColor();
+        char wanted = m.promotion;
+        if (wanted == 0) {
+            wanted = 'Q';      // nothing chosen, so give them a queen
+        }
+
+        delete grid[m.to.row][m.to.col];
+        grid[m.to.row][m.to.col] = nullptr;
+
+        Piece* promoted = nullptr;
+        if (wanted == 'R' || wanted == 'r') {
+            promoted = new Rook(colour, m.to);
+        } else if (wanted == 'B' || wanted == 'b') {
+            promoted = new Bishop(colour, m.to);
+        } else if (wanted == 'N' || wanted == 'n') {
+            promoted = new Knight(colour, m.to);
+        } else {
+            promoted = new Queen(colour, m.to);
+        }
+
+        grid[m.to.row][m.to.col] = promoted;
+    }
+}
+
+Position Board::getEnPassantSquare() const {
+    return enPassantSquare;
 }
 
 Position Board::findKing(Color c) const {
