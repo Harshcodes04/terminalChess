@@ -71,3 +71,38 @@ simulation would move the real pieces around and quietly corrupt the game. So
 `Board` has a copy constructor, and because the board only holds `Piece*` and
 does not know what kind of piece is on any square, it calls `Piece::clone()`
 and lets each piece build its own copy.
+
+## Playing in a browser
+
+As well as the terminal version there is a browser version. The same C++
+engine does all the thinking; the browser only draws the board and sends
+moves back, so no rule of chess is written twice.
+
+Build it and run it:
+
+    build-web.bat          (or: sh build-web.sh)
+    chess-web.exe
+
+Then open http://localhost:8080
+
+On a phone on the same WiFi, run `ipconfig`, find the IPv4 address and open
+`http://that-address:8080`.
+
+What it adds over the terminal version:
+
+- Click a piece and every square it may legally move to lights up. A dot
+  means an empty square, a ring means a capture. The squares come straight
+  from the engine, so a pinned piece correctly shows nothing.
+- Voice control. Press Start listening and say a square to pick a piece up,
+  then another to put it down, or say the whole move at once such as
+  "e2 to e4". The NATO words work too, so "echo two echo four" is the same
+  move. "new game" and "flip" also work. Needs Chrome or Edge.
+- The king turns red when it is in check.
+- A move list, a captured piece tray, and a button to flip the board.
+
+The server is `src/server.cpp` and the page is `web/index.html`. The only
+engine change the browser version needed was `GameState::getLegalMoves()`,
+which reuses the loop that `hasAnyLegalMove()` already ran.
+
+`third_party/httplib.h` is cpp-httplib, a single header HTTP server under
+the MIT licence. It is the only outside code in the project.
