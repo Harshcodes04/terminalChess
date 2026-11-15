@@ -1,3 +1,5 @@
 chess
 chess.exe
 *.o
+chess-web
+chess-web.exe
