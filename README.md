@@ -167,3 +167,23 @@ terminal, add the letter to the move: `a7a8q` for a queen, or `n`, `r`, `b`.
 In the browser a small window appears with the four pieces to choose from, and
 with voice you can say the piece name along with the move. Leaving the choice
 out gives a queen.
+
+### Which browsers voice works in
+
+Voice needs the browser's own speech service, and not every browser has one.
+
+| Browser | Voice | Why |
+| --- | --- | --- |
+| Chrome | works | has Google's speech service |
+| Edge | works | has its own speech service |
+| Brave | does not work | Brave removes the speech service on purpose. The page detects this and says so |
+| Firefox | does not work | no speech recognition at all |
+| A page opened inside another app's window | does not work | built on Chrome but carries no key for the service |
+
+The address also matters. Browsers only allow the microphone on `localhost`
+or on `https`, so voice is silent when the page is opened from a phone over
+a plain address such as `http://192.168.1.5:8080`. Everything else on the
+page works there normally.
+
+The Check voice setup button in the Voice panel tests each of these one at a
+time and reports which one is the problem.

@@ -355,6 +355,7 @@
           Say a square to pick a piece up, then another to move it &mdash;
           <code>e2</code> then <code>e4</code>. Or both at once:
           <code>e2 to e4</code>. Also <code>new game</code> and <code>flip</code>.
+          Needs Chrome or Edge: Brave removes the speech service.
         </div>
       </div>
 
@@ -876,6 +877,21 @@ async function handleSpeech(text) {
 
 // Plain English for each thing the speech engine can complain about, so a
 // failure says what to do instead of silently doing nothing.
+// Brave ships the speech object but takes out the service behind it, so
+// checking for the object is not enough: it looks supported and then fails
+// with a network error every single time. Brave announces itself through
+// navigator.brave, which is the only reliable way to tell.
+async function isBrave() {
+  try {
+    if (navigator.brave && navigator.brave.isBrave) {
+      return await navigator.brave.isBrave();
+    }
+  } catch (err) {
+    // Not Brave, or it refused to say.
+  }
+  return false;
+}
+
 function speechProblem(code) {
   if (code === 'not-allowed' || code === 'service-not-allowed') {
     return 'Microphone blocked. Click the padlock in the address bar and allow it.';
@@ -891,8 +907,8 @@ function speechProblem(code) {
     // reach the speech service, which happens when the page is open inside
     // an app window rather than in Chrome or Edge itself, because those
     // built-in browsers do not carry a key for the service.
-    return 'Could not reach the speech service. Open this page in Chrome or ' +
-           'Edge itself rather than inside another app.';
+    return 'Could not reach the speech service. Brave removes it on purpose, ' +
+           'and app windows do not carry a key for it. Use Chrome or Edge.';
   }
   if (code === 'aborted') {
     return '';          // normal when restarting, not worth showing
@@ -910,6 +926,17 @@ function startVoice() {
   // Speech only works on a secure page. localhost counts as secure, but an
   // address like 192.168.x.x over plain http does not, which is why voice
   // is silent on a phone unless the page is opened through localhost.
+  // Brave removes the speech service on purpose, so there is nothing to
+  // connect to however the page is opened.
+  isBrave().then(function (brave) {
+    if (brave) {
+      say('Brave has removed the speech service, so voice cannot work here. ' +
+          'Use Chrome or Edge.', 'bad');
+      $('heard').textContent = 'This is a Brave setting, not a fault in the game.';
+      setMic(false);
+    }
+  });
+
   // Opened inside another app's window rather than in a browser. Those
   // windows are built on Chrome but do not carry a key for the speech
   // service, so listening would fail with a confusing network error.
@@ -1060,10 +1087,16 @@ $('voiceCheck').addEventListener('click', async function () {
   var lines = [];
   var ua = navigator.userAgent;
 
+  var brave = await isBrave();
   var inApp = (ua.indexOf('Claude/') >= 0 || ua.indexOf('Electron/') >= 0);
-  lines.push((inApp ? 'NO  ' : 'OK  ') + 'Browser: ' +
-             (inApp ? 'an app window, not Chrome or Edge itself'
-                    : 'a real browser window'));
+
+  if (brave) {
+    lines.push('NO  Browser: Brave, which removes the speech service on purpose');
+  } else {
+    lines.push((inApp ? 'NO  ' : 'OK  ') + 'Browser: ' +
+               (inApp ? 'an app window, not Chrome or Edge itself'
+                      : 'a real browser window'));
+  }
 
   var engine = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   lines.push((engine ? 'OK  ' : 'NO  ') + 'Speech support: ' +
