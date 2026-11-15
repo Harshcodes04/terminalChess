@@ -16,8 +16,10 @@ if not exist chess-web.exe (
 rem Stop an older copy still holding the port, so this can be run twice.
 taskkill /F /IM chess-web.exe >nul 2>&1
 
-rem Open Chrome a moment from now, once the server is actually listening.
-start "" /b cmd /c "%SystemRoot%\System32	imeout.exe /t 2 /nobreak >nul & start chrome http://localhost:8080"
+rem Open Chrome a couple of seconds from now, once the server is listening.
+rem The full path to timeout is used because some setups have a different
+rem program of the same name earlier in the path.
+start "" /b cmd /c "%SystemRoot%\System32\timeout.exe /t 2 /nobreak >nul & start chrome http://localhost:8080"
 
 rem Run the server here, so Ctrl+C in this window stops it.
 .\chess-web.exe
